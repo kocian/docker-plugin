@@ -52,7 +52,6 @@ public class DockerBuilderPublisher extends Builder implements Serializable {
         listener.getLogger().println("Docker Build");
 
         FilePath fpChild = new FilePath(build.getWorkspace(), dockerFileDirectory);
-
         final String tagToUse = getTag(build, launcher, listener);
         final String url = getUrl(build);
         // Marshal the builder across the wire.

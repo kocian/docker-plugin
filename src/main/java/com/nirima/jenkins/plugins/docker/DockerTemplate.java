@@ -4,13 +4,11 @@ import com.cloudbees.jenkins.plugins.sshcredentials.SSHAuthenticator;
 import com.cloudbees.jenkins.plugins.sshcredentials.SSHUserListBoxModel;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardUsernameCredentials;
+import com.github.dockerjava.api.DockerException;
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Strings;
-
-import com.nirima.docker.client.DockerException;
-import com.nirima.docker.client.DockerClient;
-import com.nirima.docker.client.model.*;
+import com.nirima.docker.client.model.ContainerInspectResponse;
 import com.trilead.ssh2.Connection;
 import hudson.Extension;
 import hudson.Util;
@@ -24,15 +22,18 @@ import hudson.slaves.RetentionStrategy;
 import hudson.util.ListBoxModel;
 import hudson.util.StreamTaskListener;
 import jenkins.model.Jenkins;
+import org.jenkinsci.plugins.durabletask.executors.OnceRetentionStrategy;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.jenkinsci.plugins.durabletask.executors.OnceRetentionStrategy;
 
 
 public class DockerTemplate extends DockerTemplateBase implements Describable<DockerTemplate> {
@@ -82,7 +83,8 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
     public final int instanceCap;
 
     private transient /*almost final*/ Set<LabelAtom> labelSet;
-    public transient DockerCloud parent;
+
+    private transient DockerCloud dockerCloud;
 
 
     @DataBoundConstructor
@@ -181,8 +183,12 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
         return "Image of " + image;
     }
 
-    public DockerCloud getParent() {
-        return parent;
+    public DockerCloud getDockerCloud() {
+        return dockerCloud;
+    }
+
+    public void setDockerCloud(DockerCloud cloud) {
+        dockerCloud = cloud;
     }
 
     private int idleTerminationMinutes() {
@@ -219,7 +225,7 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
         // Build a description up:
         String nodeDescription = "Docker Node [" + image + " on ";
         try {
-            nodeDescription += getParent().getDisplayName();
+            nodeDescription += dockerCloud.getDisplayName();
         } catch(Exception ex)
         {
             nodeDescription += "???";
@@ -230,7 +236,7 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
 
         try
         {
-            slaveName = slaveName + "@" + getParent().getDisplayName();
+            slaveName = slaveName + "@" + dockerCloud.getDisplayName();
         }
         catch(Exception ex) {
             LOGGER.warning("Error fetching name of cloud");
@@ -245,8 +251,11 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
     }
 
     public ContainerInspectResponse provisionNew() throws DockerException {
-        DockerClient dockerClient = getParent().connect();
-        return provisionNew(dockerClient);
+        throw new NotImplementedException();
+
+        //DockerClient dockerClient = dockerCloud.getDockerClient();
+//        return provisionNew(dockerClient);
+        //return null;
     }
 
     public int getNumExecutors() {
@@ -273,7 +282,7 @@ public class DockerTemplate extends DockerTemplateBase implements Describable<Do
     public String toString() {
         return Objects.toStringHelper(this)
                 .add("image", image)
-                .add("parent", parent)
+                .add("parent", dockerCloud)
                 .toString();
     }
 }

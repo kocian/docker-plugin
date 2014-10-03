@@ -49,6 +49,11 @@
             <artifactId>durable-task</artifactId>
             <version>0.5</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java</artifactId>
+            <version>0.10.2-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -86,6 +91,10 @@
         <repository>
             <id>repo.jenkins-ci.org</id>
             <url>http://repo.jenkins-ci.org/public/</url>
+        </repository>
+        <repository>
+            <id>local.repo</id>
+            <url>file://~/.m2/repository/</url>
         </repository>
     </repositories>
 

@@ -1,12 +1,11 @@
 package com.nirima.jenkins.plugins.docker;
 
+import com.github.dockerjava.api.model.Container;
 import com.nirima.jenkins.plugins.docker.utils.Consts;
 import hudson.Extension;
 import hudson.model.Describable;
 import hudson.model.Descriptor;
-import hudson.model.Failure;
 import hudson.model.Hudson;
-import net.sf.json.JSONObject;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
@@ -15,6 +14,7 @@ import javax.servlet.ServletException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Created by magnayn on 22/02/2014.
@@ -37,17 +37,11 @@ public class DockerManagementServer  implements Describable<DockerManagementServ
     }
 
     public Collection getImages(){
-        return theCloud.connect().images()
-                .finder()
-                .allImages(false)
-                .list();
+        return theCloud.listImages();
     }
 
     public Collection getProcesses() {
-        return theCloud.connect().containers()
-                .finder()
-                .allContainers(false)
-                .list();
+        return (List<Container>)theCloud.listContainers();
     }
 
     public String asTime(Long time) {
@@ -68,9 +62,7 @@ public class DockerManagementServer  implements Describable<DockerManagementServ
             IOException,
             InterruptedException {
 
-        theCloud.connect()
-                .container(stopId)
-                .stop();
+        theCloud.stopContainer(stopId);
 
         rsp.sendRedirect(".");
     }

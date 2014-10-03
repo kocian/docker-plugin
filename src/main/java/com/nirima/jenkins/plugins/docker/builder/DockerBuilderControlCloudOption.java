@@ -1,7 +1,7 @@
 package com.nirima.jenkins.plugins.docker.builder;
 
 import com.google.common.base.Strings;
-import com.nirima.docker.client.DockerClient;
+import com.github.dockerjava.api.DockerClient;
 import com.nirima.jenkins.plugins.docker.DockerCloud;
 import com.nirima.jenkins.plugins.docker.DockerSlave;
 import hudson.model.AbstractBuild;
@@ -28,7 +28,7 @@ public abstract class DockerBuilderControlCloudOption extends DockerBuilderContr
         Node node = build.getBuiltOn();
         if( node instanceof DockerSlave) {
             DockerSlave dockerSlave = (DockerSlave)node;
-            cloud = dockerSlave.getCloud();
+            cloud = dockerSlave.getDockerCloud();
         }
 
         if( !Strings.isNullOrEmpty(cloudName) ) {
@@ -45,6 +45,6 @@ public abstract class DockerBuilderControlCloudOption extends DockerBuilderContr
     protected DockerClient getClient(AbstractBuild<?, ?> build) {
         DockerCloud cloud = getCloud(build);
 
-        return cloud.connect();
+        return cloud.getDockerClient();
     }
 }

@@ -1,20 +1,22 @@
 package com.nirima.jenkins.plugins.docker;
 
+
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.DockerException;
+import com.github.dockerjava.api.command.InspectContainerCmd;
+import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.Image;
+import com.github.dockerjava.api.model.Version;
+import com.github.dockerjava.core.DockerClientConfig;
+import com.github.dockerjava.core.DockerClientImpl;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
-import com.google.common.collect.Collections2;
-import com.nirima.docker.client.DockerException;
-import com.nirima.docker.client.model.Container;
-import com.nirima.docker.client.model.ContainerInspectResponse;
-import com.nirima.docker.client.model.Identifier;
-import com.nirima.docker.client.model.ImageInspectResponse;
-import com.nirima.docker.client.model.Version;
-import com.nirima.docker.client.model.Image;
-import com.nirima.docker.client.DockerClient;
 import hudson.Extension;
-import hudson.model.*;
+import hudson.model.Computer;
+import hudson.model.Descriptor;
+import hudson.model.Label;
+import hudson.model.Node;
 import hudson.slaves.Cloud;
 import hudson.slaves.NodeProvisioner;
 import hudson.util.FormValidation;
@@ -22,20 +24,15 @@ import hudson.util.StreamTaskListener;
 import jenkins.model.Jenkins;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-import javax.annotation.Nullable;
 import javax.servlet.ServletException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.HashMap;
 
 /**
  * Created by magnayn on 08/01/2014.
@@ -54,7 +51,7 @@ public class DockerCloud extends Cloud {
     public final int readTimeout;
 
 
-    private transient DockerClient connection;
+    private transient DockerClient dockerClient;
 
     /* Track the count per-AMI identifiers for AMIs currently being
      * provisioned, but not necessarily reported yet by docker.
@@ -70,6 +67,8 @@ public class DockerCloud extends Cloud {
         this.serverUrl = serverUrl;
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
+        this.dockerClient = null;
+
         if( templates != null )
             this.templates = new ArrayList<DockerTemplate>(templates);
         else
@@ -93,8 +92,8 @@ public class DockerCloud extends Cloud {
     }
 
     protected Object readResolve() {
-        for (DockerTemplate t : templates)
-            t.parent = this;
+        for (DockerTemplate template : templates)
+            template.setDockerCloud(this);
         return this;
     }
 
@@ -103,27 +102,42 @@ public class DockerCloud extends Cloud {
      *
      * @return Docker client.
      */
-    public synchronized DockerClient connect() {
 
-        LOGGER.log(Level.FINE, "Building connection to docker host " + name + " URL " + serverUrl);
+    public List<Container> listContainers() {
+        return (List<Container>) dockerClient.listContainersCmd();
+    }
 
-        if (connection == null) {
+    public void stopContainer(String stopId) {
+        dockerClient.stopContainerCmd(stopId);
+    }
 
-            DockerClient.Builder builder = DockerClient.builder()
-                    .withUrl(serverUrl)
-                    .withLogging(DockerClient.Logging.SLF4J);
+    public List<Image> listImages() {
+        return (List<Image>) dockerClient.listImagesCmd();
+    }
 
-            if (connectTimeout > 0)
-                builder.connectTimeout(connectTimeout * 1000);
+    public InspectContainerCmd inspectContainer(String containerId) {
+        return dockerClient.inspectContainerCmd(containerId);
+    }
 
-            if (readTimeout > 0)
-                builder.readTimeout(readTimeout * 1000);
+    public synchronized DockerClient getDockerClient() {
+        if (dockerClient != null)
+            return dockerClient;
 
-            connection = builder.build();
-        }
-        return connection;
+        DockerClientConfig.DockerClientConfigBuilder builder = DockerClientConfig.createDefaultConfigBuilder();
+
+        builder.withUri(serverUrl);
+
+        if (readTimeout > 0)
+            builder.withReadTimeout(readTimeout);
+
+        DockerClientConfig config = builder.build();
+
+        dockerClient = DockerClientImpl.getInstance(config);
+
+        return dockerClient;
 
     }
+
 
     /**
      * Decrease the count of slaves being "provisioned".
@@ -228,9 +242,9 @@ public class DockerCloud extends Cloud {
     /**
      * Add a new template to the cloud
      */
-    public void addTemplate(DockerTemplate t) {
-        this.templates.add(t);
-        t.parent = this;
+    public void addTemplate(DockerTemplate template) {
+        this.templates.add(template);
+        template.setDockerCloud(this);
     }
 
     /**
@@ -249,37 +263,43 @@ public class DockerCloud extends Cloud {
      * This includes those instances that may be started outside Hudson.
      */
     public int countCurrentDockerSlaves(String ami) throws Exception {
-        final DockerClient dockerClient = connect();
 
-        List<Container> containers = dockerClient.containers().finder().allContainers(false).list();
+        List<Container> containers = ((List<Container>) dockerClient.listContainersCmd());
 
         if (ami == null)
             return containers.size();
 
-        List<Image> images = dockerClient.images().finder().allImages(true).filter(ami).list();
+        List<Image> images = (List<Image>) dockerClient.listImagesCmd();
+
+
         LOGGER.log(Level.INFO, "Images found: " + images);
 
         if (images.size() == 0) {
+            // TODO implement that
+            throw new NotImplementedException();
+            /*
             LOGGER.log(Level.INFO, "Pulling image " + ami + " since one was not found.  This may take awhile...");
-            Identifier amiId = Identifier.fromCompoundString(ami);
-            InputStream imageStream = dockerClient.createPullCommand().image(amiId).execute();
-            int streamValue = 0;
-            while (streamValue != -1) {
-                streamValue = imageStream.read();
-            }
-            imageStream.close();
+            //Identifier amiId = Identifier.fromCompoundString(ami);
+            //InputStream imageStream = dockerClient.pullImageCmd(amiId.toString());
+            //int streamValue = 0;
+            //while (streamValue != -1) {
+            //    streamValue = imageStream.read();
+            //}
+            //imageStream.close();
             LOGGER.log(Level.INFO, "Finished pulling image " + ami);
+            */
         }
 
-        final ImageInspectResponse ir = dockerClient.image(ami).inspect();
-
+        //TODO see if its important
+/*
+        final SearchImagesCmd ir = dockerClient.searchImagesCmd(ami);
         Collection<Container> matching = Collections2.filter(containers, new Predicate<Container>() {
             public boolean apply(@Nullable Container container) {
-                ContainerInspectResponse cis = dockerClient.container(container.getId()).inspect();
-                return (cis.getImage().equalsIgnoreCase(ir.getId()));
+                InspectContainerResponse cis = dockerClient.inspectContainerCmd(container.getId()).exec();
+                return (cis.getImageId().equalsIgnoreCase(ir.getId()));
             }
-        });
-        return matching.size();
+        });*/
+        return 0;
     }
 
     /**
@@ -345,13 +365,13 @@ public class DockerCloud extends Cloud {
         public FormValidation doTestConnection(
                 @QueryParameter URL serverUrl
                 ) throws IOException, ServletException, DockerException {
+            DockerClient dockerClient = DockerClientImpl.getInstance(serverUrl.toString());
 
-            DockerClient dc = DockerClient.builder().withUrl(serverUrl.toString()).build();
+            Version version = dockerClient.versionCmd().exec();
 
-            Version version = dc.system().version();
-
-            if( version.getVersionComponents()[0] < 1 )
-                return FormValidation.error("Docker host is " + version.getVersion() + " which is not supported.");
+// TODO: check version support?
+//            if( version.getVersion()getVersionComponents()[0] < 1 )
+//                return FormValidation.error("Docker host is " + version.getVersion() + " which is not supported.");
 
             return FormValidation.ok("Version = " + version.getVersion());
         }
